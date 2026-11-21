@@ -1,0 +1,64 @@
+## Interface: 16001
+## Title: Forever Death Note
+## Title-ruRU: Тетрадь смерти
+## Title-deDE: Todeschronik
+## Title-frFR: Carnet de la mort
+## Title-esES: Cuaderno de la muerte
+## Title-esMX: Cuaderno de la muerte
+## Title-ptBR: Caderno da Morte
+## Title-koKR: 죽음의 수첩
+## Notes: Open-world PvP journal, rival alerts and rankings. /fdn
+## Notes-ruRU: Журнал PvP открытого мира, алерты и рейтинги. /fdn
+## Notes-deDE: PvP-Tagebuch für die offene Welt, Rivalenwarnungen und Ranglisten. /fdn
+## Notes-frFR: Journal JcJ en monde ouvert, alertes de rivaux et classements. /fdn
+## Notes-esES: Diario de JcJ en mundo abierto, alertas de rivales y clasificaciones. /fdn
+## Notes-esMX: Diario de JcJ en mundo abierto, alertas de rivales y clasificaciones. /fdn
+## Notes-ptBR: Diário de JxJ no mundo aberto, alertas de rivais e rankings. /fdn
+## Notes-koKR: 야외 PvP 기록, 숙적 알림 및 순위표. /fdn
+## Version: 2.7.0
+## IconTexture: Interface\AddOns\ForeverDeathNote\Art\Identity
+## DefaultState: enabled
+## SavedVariables: ForeverDeathNoteDB, ForeverDeathNoteWebSnapshot
+
+Locale.lua
+Locales\enUS.lua
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\ptBR.lua
+Locales\koKR.lua
+ProductionUI.lua
+LocaleFonts.lua
+Layout.lua
+AllRecords.lua
+Journal.lua
+Capture.lua
+Community.lua
+GuildSync.lua
+GuildHunts.lua
+Hunt.lua
+Dossier.lua
+PlayerTooltip.lua
+FightReport.lua
+Sortie.lua
+WorldMap.lua
+Alert.lua
+HuntTracker.lua
+Nearby.lua
+TerritorySync.lua
+Front.lua
+HuntBoard.lua
+Theme.lua
+FieldJournal.lua
+Progression.lua
+Rampage.lua
+GuildProfiles.lua
+Ladder.lua
+Territories.lua
+WorldTerritories.lua
+ZoneScore.lua
+WebExport.lua
+Onboarding.lua
+Window.lua
+Minimap.lua
+GameMenu.lua
