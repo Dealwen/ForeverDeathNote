@@ -21,6 +21,10 @@ local guildAtlas = "Interface\\GuildFrame\\GuildFrame"
 local unknownCrest = "Interface\\GuildFrame\\GuildLogo-NoLogo"
 local flat = "Interface\\Buttons\\WHITE8X8"
 local tabardLookups = {}
+local terrainFiles = {
+    [1414] = "Interface\\AddOns\\ForeverDeathNote\\Art\\TerritoryKalimdor.jpg",
+    [1415] = "Interface\\AddOns\\ForeverDeathNote\\Art\\TerritoryEasternKingdoms.jpg",
+}
 
 local function tabardCache()
     local realms = ForeverDeathNoteDB and ForeverDeathNoteDB.territoryTabards
@@ -349,6 +353,13 @@ local function markerFor(canvas, index)
     marker.crestRim:SetTexCoord(0.63183594, 0.69238281, 0.74414063, 0.86523438)
     marker.icon = marker:CreateTexture(nil, "ARTWORK")
     marker.icon:SetPoint("CENTER")
+    marker.zonePlate = marker:CreateTexture(nil, "BACKGROUND")
+    marker.zonePlate:SetAllPoints()
+    marker.zonePlate:SetColorTexture(0.035, 0.046, 0.058, 0.83)
+    marker.zoneLabel = note.CreateFontString(marker, nil, "OVERLAY", "GameFontHighlightSmall")
+    marker.zoneLabel:SetPoint("CENTER", 0, 1)
+    marker.zoneLabel:SetTextColor(0.99, 0.93, 0.79)
+    marker.zoneLabel:SetWordWrap(false)
     marker:SetSize(24, 20)
     marker.tint = canvas:CreateTexture(nil, "ARTWORK", nil, -2)
     marker.border = canvas:CreateTexture(nil, "ARTWORK", nil, 1)
@@ -376,6 +387,26 @@ local function markerFor(canvas, index)
     end)
     canvas.markers[index] = marker
     return marker
+end
+
+local function drawTerritoryTerrain(canvas)
+    local file = terrainFiles[continent]
+    if not file or (canvas.terrainMap ~= continent and canvas.terrain:SetTexture(file) == false) then
+        canvas.terrainMap = nil
+        canvas.terrain:Hide()
+        return note.DrawMapTiles(canvas, continent)
+    end
+    if canvas.terrainMap ~= continent or not canvas.terrain:IsShown() then
+        canvas.terrainMap = continent
+        for _, tile in ipairs(canvas.tiles) do tile:Hide() end
+        canvas.ready = nil
+        local width = math.min(canvas.host:GetWidth() - 10, (canvas.host:GetHeight() - 10) * 1.5)
+        canvas:SetSize(width, width / 1.5)
+        -- The projected artwork is stored at 1024x1024 for the game texture loader.
+        canvas.terrain:SetTexCoord(0, 1, 0, 683 / 1024)
+        canvas.terrain:Show()
+    end
+    return true
 end
 
 -- World Map highlights can have black padding. Additive blending keeps it invisible.
@@ -492,11 +523,11 @@ end
 local function refreshMap(zones)
     local canvas = window.canvas
     updateHover(canvas)
-    local hasArt = note.DrawMapTiles(canvas, continent)
+    local hasArt = drawTerritoryTerrain(canvas)
     canvas:SetShown(hasArt == true)
     window.missing:SetShown(not hasArt)
 
-    local count = 0
+    local count, labels = 0, {}
     local function showMarker(target, x, y)
         count = count + 1
         local marker = markerFor(canvas, count)
@@ -512,9 +543,40 @@ local function refreshMap(zones)
         else
             note.DrawTerritoryContour(marker.border, canvas, continent, target.key, false, 0.84, 0.72, 0.52, 0.4)
         end
+        local px, py = x * canvas:GetWidth(), y * canvas:GetHeight()
         marker:ClearAllPoints()
-        marker:SetPoint("CENTER", canvas, "TOPLEFT", x * canvas:GetWidth(), -y * canvas:GetHeight())
+        marker:SetPoint("CENTER", canvas, "TOPLEFT", px, -py)
         local total = target.ownerKills or 0
+        local quiet = not target.owner and target.Horde + target.Alliance == 0
+        marker.zonePlate:SetShown(quiet)
+        marker.zoneLabel:SetShown(quiet)
+        marker.icon:SetShown(not quiet)
+        if quiet then
+            marker.crestField:Hide()
+            marker.crestRim:Hide()
+            marker.badge:Hide()
+            marker.badgeEdge:Hide()
+            marker.count:Hide()
+            marker.zoneLabel:SetText(zoneName(target))
+            local width, height = marker.zoneLabel:GetStringWidth() + 8, 14
+            marker:SetSize(width, height)
+            marker:SetFrameLevel(canvas:GetFrameLevel() + 2)
+            if px - width / 2 < 2 or px + width / 2 > canvas:GetWidth() - 2
+                or py - height / 2 < 2 or py + height / 2 > canvas:GetHeight() - 2 then
+                marker:Hide()
+                return
+            end
+            for _, placed in ipairs(labels) do
+                if math.abs(px - placed.x) < (width + placed.w) / 2 + 3
+                    and math.abs(py - placed.y) < (height + placed.h) / 2 + 3 then
+                    marker:Hide()
+                    return
+                end
+            end
+            labels[#labels + 1] = { x = px, y = py, w = width, h = height }
+            marker:Show()
+            return
+        end
         local size = target.owner and (target.key == selected and 34 or 29) or total > 0 and 24 or 17
         marker:SetSize(math.max(size, 21), math.max(size, 21))
         marker:SetFrameLevel(canvas:GetFrameLevel() + (target.key == selected and 4 or total > 0 and 3 or 2))
@@ -527,6 +589,8 @@ local function refreshMap(zones)
         marker.count:SetTextColor(1, 0.97, 0.87)
         marker.count:SetText(tostring(total))
         marker.badge:SetWidth(math.max(22, marker.count:GetStringWidth() + 10))
+        labels[#labels + 1] = { x = px, y = py + (total > 0 and 7 or 0),
+            w = math.max(size, marker.badge:GetWidth()), h = size + (total > 0 and 16 or 0) }
         marker:Show()
     end
     if hasArt then
@@ -716,6 +780,9 @@ function note.BuildEmbeddedTerritories(parent)
     canvas:SetPoint("CENTER")
     canvas:SetSize(467, 308)
     canvas.host, canvas.tiles, canvas.markers = host, {}, {}
+    canvas.terrain = canvas:CreateTexture(nil, "BACKGROUND")
+    canvas.terrain:SetAllPoints()
+    canvas.terrain:Hide()
     canvas.hover = canvas:CreateTexture(nil, "ARTWORK", nil, 3)
     canvas.shading, canvas.shapes = {}, {}
     canvas:SetScript("OnClick", function(self)

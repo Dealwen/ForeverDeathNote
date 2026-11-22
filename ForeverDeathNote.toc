@@ -15,7 +15,7 @@
 ## Notes-esMX: Diario de JcJ en mundo abierto, alertas de rivales y clasificaciones. /fdn
 ## Notes-ptBR: Diário de JxJ no mundo aberto, alertas de rivais e rankings. /fdn
 ## Notes-koKR: 야외 PvP 기록, 숙적 알림 및 순위표. /fdn
-## Version: 2.10.0
+## Version: 2.10.1
 ## IconTexture: Interface\AddOns\ForeverDeathNote\Art\Identity
 ## DefaultState: enabled
 ## SavedVariables: ForeverDeathNoteDB, ForeverDeathNoteWebSnapshot, ForeverDeathNoteMapExport
