@@ -1,6 +1,6 @@
 # Тетрадь смерти для WoW Forever
 
-Версия 2.9.0 для WoW Forever 1.60.1 (Interface 16001).
+Версия 2.10.0 для WoW Forever 1.60.1 (Interface 16001).
 
 1. Положите папку `ForeverDeathNote` в `World of Warcraft/_forever_/Interface/AddOns`.
 2. Запустите клиент и проверьте, что аддон включён в списке модификаций.
@@ -22,6 +22,8 @@ Run `/fdn lang`, choose a language, and click **Apply and reload** out of combat
 Шрифт FDN UI Sans для переключения между письменностями основан на Noto Sans KR. Текст лицензии SIL OFL находится в `Fonts/OFL.txt`. [Noto Sans KR в репозитории Google Fonts](https://github.com/google/fonts/tree/main/ofl/notosanskr)
 
 ## Карта территорий
+
+Карта показывает границы 43 зон Калимдора и Восточных королевств. Штриховка обозначает контроль гильдии. У каждой гильдии свой цвет, одинаковый для всех её зон. При выборе зоны контур выделяется золотым, а справа остаются владелец, счёт фракций и лидер по добиваниям. На обычной карте мира (`M`) штриховка доступна через слой PvP. Контуры подготовлены по данным [Waymark](https://github.com/GalacticWandererAddon/Waymark) (MIT), фон берётся из игрового клиента.
 
 ### Общая PvP-карта на сайте
 

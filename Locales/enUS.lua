@@ -24,6 +24,7 @@ note.translations.enUS = {
     ["Моя гильдия"] = "My guild",
     ["Все игроки"] = "All players",
     ["Территории"] = "Territories",
+    ["Штриховка по гильдиям"] = "Guild territory shading",
     ["Гильдия-владелец"] = "Controlling guild",
     ["Территории: %d/%d (%.1f%%)"] = "Territory: %d/%d (%.1f%%)",
     ["Территории: нет данных"] = "Territory unavailable",

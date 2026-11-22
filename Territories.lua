@@ -159,6 +159,11 @@ local function standing(zone)
     return zone.ownerTie and sides.tie or sides.empty
 end
 
+local function territoryTint(zone)
+    if zone.owner then return note.TerritoryGuildTint(zone.owner.name) end
+    return unpack(standing(zone).color)
+end
+
 local function getCatalog()
     if catalog then return catalog end
     local index = {}
@@ -289,10 +294,9 @@ end
 local function tooltip(control, target, anchor)
     local zone = target or control.zone
     if not zone then return end
-    local status = standing(zone)
     GameTooltip:SetOwner(control, anchor or "ANCHOR_RIGHT")
     GameTooltip:SetText(zoneName(zone))
-    GameTooltip:AddDoubleLine(L["Гильдия-владелец"], ownerName(zone), 0.92, 0.80, 0.56, unpack(status.color))
+    GameTooltip:AddDoubleLine(L["Гильдия-владелец"], ownerName(zone), 0.92, 0.80, 0.56, territoryTint(zone))
     if zone.ownerKills and zone.ownerKills > 0 then
         GameTooltip:AddDoubleLine(L["Добивания владельца"], tostring(zone.ownerKills), 0.92, 0.80, 0.56, 1, 1, 1)
     end
@@ -346,7 +350,8 @@ local function markerFor(canvas, index)
     marker.icon = marker:CreateTexture(nil, "ARTWORK")
     marker.icon:SetPoint("CENTER")
     marker:SetSize(24, 20)
-    marker.tint = canvas:CreateTexture(nil, "ARTWORK")
+    marker.tint = canvas:CreateTexture(nil, "ARTWORK", nil, -2)
+    marker.border = canvas:CreateTexture(nil, "ARTWORK", nil, 1)
     marker.badge = marker:CreateTexture(nil, "ARTWORK", nil, 2)
     marker.badge:SetHeight(18)
     marker.badge:SetPoint("TOP", marker, "BOTTOM", 0, -1)
@@ -470,6 +475,7 @@ updateHover = function(canvas, zone, x, y)
     for _, strip in ipairs(canvas.shading) do strip:Hide() end
     if not zone then return end
     local r, g, b = unpack(standing(zone).color)
+    if note.DrawTerritoryContour(canvas.hover, canvas, continent, zone.key, false, 1, 0.94, 0.70, 1) then return end
     if x and paintZone(canvas.hover, canvas, zone, x, y, r, g, b, true) then return end
     local w, h = canvas:GetWidth(), canvas:GetHeight()
     for i, span in ipairs(note.TerritoryShape(canvas.shapes, continent, zone.key)) do
@@ -494,9 +500,18 @@ local function refreshMap(zones)
     local function showMarker(target, x, y)
         count = count + 1
         local marker = markerFor(canvas, count)
-        local r, g, b = unpack(standing(target).color)
+        local r, g, b = territoryTint(target)
         marker.zone = target
-        paintZone(marker.tint, canvas, target, x, y, r, g, b)
+        if not target.owner or not note.DrawTerritoryContour(marker.tint, canvas, continent, target.key, true, r, g, b, 0.85) then
+            paintZone(marker.tint, canvas, target, x, y, r, g, b)
+        end
+        if target.key == selected then
+            note.DrawTerritoryContour(marker.border, canvas, continent, target.key, false, 1, 0.89, 0.54, 1)
+        elseif target.owner or target.Horde + target.Alliance > 0 then
+            note.DrawTerritoryContour(marker.border, canvas, continent, target.key, false, r, g, b, 0.78)
+        else
+            note.DrawTerritoryContour(marker.border, canvas, continent, target.key, false, 0.84, 0.72, 0.52, 0.4)
+        end
         marker:ClearAllPoints()
         marker:SetPoint("CENTER", canvas, "TOPLEFT", x * canvas:GetWidth(), -y * canvas:GetHeight())
         local total = target.ownerKills or 0
@@ -526,6 +541,7 @@ local function refreshMap(zones)
     for i = count + 1, #canvas.markers do
         canvas.markers[i]:Hide()
         canvas.markers[i].tint:Hide()
+        canvas.markers[i].border:Hide()
     end
 end
 
@@ -656,10 +672,10 @@ function note.RefreshTerritories()
     window.next:SetEnabled(page < pages)
     window.openAll:SetEnabled(#zones > 0 and note.OpenAllRecords ~= nil)
     window.selection:SetText(zone and zoneName(zone) or L["За эту неделю пока нет боёв с известной зоной."])
-    local status = zone and standing(zone) or sides.empty
     local kills = zone and zone.ownerKills or 0
     window.status:SetText(ownerName(zone) .. (kills > 0 and ("  ·  %d"):format(kills) or ""))
-    window.status:SetTextColor(unpack(status.color))
+    if zone then window.status:SetTextColor(territoryTint(zone))
+    else window.status:SetTextColor(unpack(sides.empty.color)) end
     window.horde:SetText(tostring(zone and zone.Horde or 0))
     window.alliance:SetText(tostring(zone and zone.Alliance or 0))
     window.topKiller:SetText(topKillerText(zone))
@@ -816,8 +832,8 @@ function note.BuildEmbeddedTerritories(parent)
         if frame.zone and frame.zone.pin then note.OpenFightMap(sample, frame.zone.pin, frame.zone) end
     end)
     local legend = label(frame, "GameFontHighlightSmall", 4, -380, 306)
-    legend:SetText(L["Гильдия-владелец"] .. "  ·  |cffff6b4f" .. L["Орда"] .. "|r  /  |cff61abff" .. L["Альянс"]
-        .. "|r  /  |cfff2c769" .. L["Ничья"] .. "|r  /  |cff9dd883" .. L["Без владельца"] .. "|r")
+    legend:SetText(L["Штриховка по гильдиям"] .. "\n|cffff6b4f" .. L["Орда"] .. "|r  /  |cff61abff" .. L["Альянс"]
+        .. "|r  /  |cfff2c769" .. L["Ничья"] .. "|r")
     legend:SetMaxLines(2)
     window = frame
     shared = note.db.territoryMode == "shared"

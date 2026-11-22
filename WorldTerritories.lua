@@ -109,6 +109,8 @@ end
 local function paintBoundary(zone, n, numStrips, x, y, r, g, b)
     local texture = highlights[n] or layer:CreateTexture(nil, "ARTWORK")
     highlights[n] = texture
+    if zone.owner and note.DrawTerritoryContour(texture, layer, mapID, zone.key, true,
+        r, g, b, 0.86) then return numStrips end
     if not note.DrawTerritoryTint(texture, layer, mapID, zone.key, x, y, r, g, b, 0.57) then
         for _, span in ipairs(note.TerritoryShape(shapes, mapID, zone.key)) do
             numStrips = numStrips + 1
@@ -138,6 +140,7 @@ local function render()
             if type(zone.key) == "number" then x, y = note.TerritoryCenter(zone.key, mapID) end
             if x and y then
                 local r, g, b = note.TerritoryColor(zone)
+                if zone.owner then r, g, b = note.TerritoryGuildTint(zone.owner.name) end
                 local hasScore = zone.Horde + zone.Alliance > 0
                 if hasScore then
                     paints = paints + 1
