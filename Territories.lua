@@ -131,11 +131,9 @@ local function ownerName(zone)
     return L[zone and zone.ownerTie and "Ничья" or "Без владельца"]
 end
 
-local function topKillerText(zone)
+local function topKillerName(zone)
     if not zone or not zone.topKills or zone.topKills == 0 then return L["Пока нет добиваний."] end
-    local name = zone.topKillerTie and L["Ничья"]
-        or zone.topKiller and zone.topKiller.name or L["Имя неизвестно"]
-    return ("%s  ·  %d"):format(name, zone.topKills)
+    return zone.topKillerTie and L["Ничья"] or zone.topKiller and zone.topKiller.name or L["Имя неизвестно"]
 end
 
 function note.OpenTerritoryRecords(title, subtitle, rows, startIndex, onSelect)
@@ -293,6 +291,30 @@ local function sizeText(text, size)
     if file then text:SetFont(file, size, flags or "") end
 end
 
+local function layoutBannerEmblem(banner, crest)
+    banner.crestField:SetShown(crest ~= nil)
+    banner.crestLeft:SetShown(crest ~= nil)
+    banner.crestRight:SetShown(crest ~= nil)
+    if not crest then return end
+
+    -- Tabard files store half of the design at the left edge of a 512 x 1024 texture.
+    local right, top, bottom = 360, 248, 816
+    if crest.file == 414878 then
+        -- The gnome emblem has a narrower silhouette than the common tabard crop.
+        right, top, bottom = 240, 302, 738
+    end
+    local scale = math.min(15 / right, 31 / (bottom - top))
+    local r, g, b = unpack(crest.emblem)
+    local left, rightHalf = banner.crestLeft, banner.crestRight
+    for _, half in ipairs(banner.crestHalves) do
+        half:SetTexture(crest.file)
+        half:SetSize(right * scale, (bottom - top) * scale)
+        half:SetVertexColor(0.56 + 0.44 * r, 0.56 + 0.44 * g, 0.56 + 0.44 * b)
+    end
+    left:SetTexCoord(right / 512, 0, top / 1024, bottom / 1024)
+    rightHalf:SetTexCoord(0, right / 512, top / 1024, bottom / 1024)
+end
+
 function refreshOwnerBanner(frame, zone)
     local banner, owner = frame.ownerBanner, zone and zone.owner
     banner:SetShown(owner ~= nil)
@@ -305,23 +327,16 @@ function refreshOwnerBanner(frame, zone)
     end
 
     banner.name:SetText(owner.name)
-    sizeText(banner.name, 17)
+    sizeText(banner.name, 18)
     local nameWidth = banner.name.GetUnboundedStringWidth and banner.name:GetUnboundedStringWidth()
         or banner.name:GetStringWidth()
     if nameWidth > banner.name:GetWidth() then
-        sizeText(banner.name, math.max(10, math.floor(17 * banner.name:GetWidth() / nameWidth)))
+        sizeText(banner.name, math.max(10, math.floor(18 * banner.name:GetWidth() / nameWidth)))
     end
     banner.kills:SetText(L["Добивания гильдии: %d"]:format(zone.ownerKills or 0))
 
     local cache = tabardCache()
-    local crest = cache and cache[owner.faction .. ":" .. owner.id]
-    banner.crestField:SetShown(crest ~= nil)
-    banner.crest:SetShown(crest ~= nil)
-    if not crest then return end
-    banner.crestField:SetVertexColor(unpack(crest.background))
-    banner.crest:SetTexture(crest.file)
-    banner.crest:SetTexCoord(0, 0.5, 0.5, 1)
-    banner.crest:SetVertexColor(unpack(crest.emblem))
+    layoutBannerEmblem(banner, cache and cache[owner.faction .. ":" .. owner.id])
 end
 
 local function button(parent, caption, x, y, width, action)
@@ -344,7 +359,9 @@ local function tooltip(control, target, anchor)
     if zone.ownerKills and zone.ownerKills > 0 then
         GameTooltip:AddDoubleLine(L["Добивания владельца"], tostring(zone.ownerKills), 0.92, 0.80, 0.56, 1, 1, 1)
     end
-    GameTooltip:AddDoubleLine(L["Лидер по добиваниям"], topKillerText(zone), 0.92, 0.80, 0.56, 1, 1, 1)
+    local killer = topKillerName(zone)
+    if zone.topKills and zone.topKills > 0 then killer = ("%s (%d)"):format(killer, zone.topKills) end
+    GameTooltip:AddDoubleLine(L["Лидер по добиваниям"], killer, 0.92, 0.80, 0.56, 1, 1, 1)
     GameTooltip:AddDoubleLine(L["Орда"], tostring(zone.Horde), 1, 0.42, 0.31, 1, 1, 1)
     GameTooltip:AddDoubleLine(L["Альянс"], tostring(zone.Alliance), 0.38, 0.67, 1, 1, 1, 1)
     if shared and zone.shared and zone.shared > 0 then
@@ -859,7 +876,8 @@ function note.RefreshTerritories()
     refreshOwnerBanner(window, zone)
     window.horde:SetText(tostring(zone and zone.Horde or 0))
     window.alliance:SetText(tostring(zone and zone.Alliance or 0))
-    window.topKiller:SetText(topKillerText(zone))
+    window.topKiller:SetText(topKillerName(zone))
+    window.topKillerCount:SetText(zone and zone.topKills and zone.topKills > 0 and tostring(zone.topKills) or "")
     window.log:SetEnabled(zone ~= nil and zone.entries ~= nil and next(zone.entries) ~= nil)
     window.pinMap:SetEnabled(zone ~= nil and zone.pin ~= nil)
     refreshMap(zones)
@@ -979,6 +997,11 @@ function note.BuildEmbeddedTerritories(parent)
         row.tint = row:CreateTexture(nil, "BACKGROUND")
         row.tint:SetAllPoints()
         row.tint:SetColorTexture(0.36, 0.23, 0.089, 0.93)
+        local divider = row:CreateTexture(nil, "ARTWORK")
+        divider:SetPoint("BOTTOMLEFT")
+        divider:SetPoint("BOTTOMRIGHT")
+        divider:SetHeight(1)
+        divider:SetColorTexture(0.65, 0.49, 0.29, 0.19)
         row.guildEdge = row:CreateTexture(nil, "ARTWORK")
         row.guildEdge:SetPoint("TOPLEFT", 0, -1)
         row.guildEdge:SetPoint("BOTTOMLEFT", 0, 1)
@@ -1014,13 +1037,13 @@ function note.BuildEmbeddedTerritories(parent)
         note.OpenTerritoryRecords(L["Карта территорий"], frame.source:GetText(), scores[continent],
             (page - 1) * pageSize + 1, function(zone) selectZone(zone.key) end)
     end)
-    frame.selection = label(panel, "GameFontNormal", 16, -143, 224)
-    note.StyleHeadingFont(frame.selection)
+    frame.selection = label(panel, "GameFontNormal", 16, -142, 224)
     sizeText(frame.selection, 16)
+    frame.selection:SetTextColor(1, 0.84, 0.49)
     frame.selection:SetWordWrap(false)
 
     local banner = CreateFrame("Frame", nil, panel)
-    banner:SetPoint("TOPLEFT", 11, -161)
+    banner:SetPoint("TOPLEFT", 11, -163)
     banner:SetSize(234.5, 61)
     banner:Hide()
     frame.ownerBanner = banner
@@ -1033,17 +1056,20 @@ function note.BuildEmbeddedTerritories(parent)
     banner.crestField:SetSize(44, 51)
     banner.crestField:SetTexture(ownerBannerArt)
     banner.crestField:SetTexCoord(0, 88 / 512, 128 / 256, 230 / 256)
-    banner.crest = banner:CreateTexture(nil, "OVERLAY")
-    banner.crest:SetSize(27, 27)
-    banner.crest:SetPoint("CENTER", banner.crestField, "CENTER", 0, 1)
+    banner.crestField:SetVertexColor(0.14, 0.32, 0.61)
+    banner.crestLeft = banner:CreateTexture(nil, "OVERLAY")
+    banner.crestLeft:SetPoint("RIGHT", banner.crestField, "CENTER", 0, 1)
+    banner.crestRight = banner:CreateTexture(nil, "OVERLAY")
+    banner.crestRight:SetPoint("LEFT", banner.crestField, "CENTER", 0, 1)
+    banner.crestHalves = { banner.crestLeft, banner.crestRight }
     local caption = label(banner, "GameFontHighlightSmall", 78, -7, 148)
     caption:SetText(L["Контроль территории"])
     caption:SetTextColor(0.88, 0.76, 0.56)
     caption:SetWordWrap(false)
     banner.name = label(banner, "GameFontNormalLarge", 77, -19, 151)
-    banner.name:SetTextColor(0.45, 0.81, 0.98)
+    banner.name:SetTextColor(0.51, 0.85, 1)
     banner.name:SetWordWrap(false)
-    banner.kills = label(banner, "GameFontHighlightSmall", 79, -42, 146)
+    banner.kills = label(banner, "GameFontHighlightSmall", 78, -43, 146)
     banner.kills:SetTextColor(0.92, 0.83, 0.69)
     banner.kills:SetWordWrap(false)
 
@@ -1059,21 +1085,39 @@ function note.BuildEmbeddedTerritories(parent)
         if i == 1 then note.WarTable.Panel(field, 0.22, 0.077, 0.052)
         else note.WarTable.Panel(field, 0.053, 0.091, 0.16) end
         local crest = field:CreateTexture(nil, "ARTWORK")
-        crest:SetSize(24, 24)
+        crest:SetSize(28, 28)
         crest:SetPoint("LEFT", 6, 0)
         note.SetFactionEmblem(crest, faction[1])
-        local caption = label(field, "GameFontHighlightSmall", 35, -4, 72)
+        local caption = label(field, "GameFontHighlightSmall", 37, -4, 70)
         caption:SetText(L[faction[2]])
-        caption:SetTextColor(unpack(sides[faction[1]].color))
+        caption:SetTextColor(0.96, 0.86, 0.70)
         caption:SetWordWrap(false)
-        local value = label(field, "GameFontHighlightLarge", 35, -16, 72)
+        local value = label(field, "GameFontHighlightLarge", 37, -16, 70)
         note.StyleMapNumber(value, 20)
         value:SetTextColor(1, 0.97, 0.87)
         frame[faction[3]] = value
     end
-    label(panel, "GameFontHighlightSmall", 16, -279, 70):SetText(L["Лидер по добиваниям"])
-    frame.topKiller = label(panel, "GameFontHighlightSmall", 88, -279, 148)
+    local killerLabel = label(panel, "GameFontHighlightSmall", 16, -281, 70)
+    killerLabel:SetText(L["Лидер по добиваниям"])
+    killerLabel:SetTextColor(0.91, 0.79, 0.58)
+    for _, y in ipairs({ -275, -298 }) do
+        local divider = panel:CreateTexture(nil, "ARTWORK")
+        divider:SetPoint("TOPLEFT", 11, y)
+        divider:SetSize(234, 1)
+        divider:SetColorTexture(0.65, 0.49, 0.29, 0.29)
+    end
+    for _, x in ipairs({ 85, 205 }) do
+        local divider = panel:CreateTexture(nil, "ARTWORK")
+        divider:SetPoint("TOPLEFT", x, -279)
+        divider:SetSize(1, 15)
+        divider:SetColorTexture(0.65, 0.49, 0.29, 0.36)
+    end
+    frame.topKiller = label(panel, "GameFontHighlightSmall", 92, -281, 108)
     frame.topKiller:SetWordWrap(false)
+    frame.topKillerCount = label(panel, "GameFontHighlightSmall", 210, -279, 28)
+    frame.topKillerCount:SetJustifyH("RIGHT")
+    frame.topKillerCount:SetTextColor(1, 0.92, 0.73)
+    note.StyleMapNumber(frame.topKillerCount, 13)
     frame.log = button(panel, L["Журнал зоны"], 11, -303, 114, function()
         if frame.zone and frame.zone.count > 0 then note.OpenFrontJournal(sample, frame.zone) end
     end)
