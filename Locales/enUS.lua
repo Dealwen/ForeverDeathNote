@@ -1,5 +1,7 @@
 local _, note = ...
 note.translations.enUS = {
+    ["Контроль территории"] = "CONTROLLED BY",
+    ["Добивания гильдии: %d"] = "%d guild kills",
     ["Экспорт для сайта"] = "Export for website",
     ["Скопируйте для сайта: %d игроков, %d гильдий, %d зон."] = "Copy for the website: %d players, %d guilds, %d zones.",
     ["Скопируйте снимок и вставьте его на сайте."] = "Copy the snapshot and paste it into the website.",

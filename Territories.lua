@@ -1,6 +1,7 @@
 local _, note = ...
 local L = note.L
 local window, sample, catalog
+local refreshOwnerBanner
 local scores, shared
 local hoverID, hoverRegion, hoverZone
 local continent, selected, page = nil, nil, 1
@@ -16,6 +17,7 @@ local sides = {
     tie = { color = { 0.95, 0.78, 0.42 } },
     empty = { color = { 0.53, 0.76, 0.47 } },
 }
+local ownerBannerArt = "Interface\\AddOns\\ForeverDeathNote\\Art\\TerritoryGuildBanner.tga"
 local neutralFlag = "Interface\\AddOns\\ForeverDeathNote\\Art\\NeutralPennant.tga"
 local guildAtlas = "Interface\\GuildFrame\\GuildFrame"
 local unknownCrest = "Interface\\GuildFrame\\GuildLogo-NoLogo"
@@ -102,6 +104,8 @@ function note.CacheTerritoryTabard(unit, guild, faction, guildRealm)
     cache[key] = { file = file, background = background, border = border, emblem = emblem }
     realms[note.scope], ForeverDeathNoteDB.territoryTabards = cache, realms
     if not window or not window:IsVisible() then return end
+    local current = window.zone and window.zone.owner
+    if current and current.faction .. ":" .. current.id == key then refreshOwnerBanner(window, window.zone) end
     for _, marker in ipairs(window.canvas.markers) do
         local owner = marker.zone and marker.zone.owner
         if marker:IsShown() and owner and owner.faction .. ":" .. owner.id == key then
@@ -282,6 +286,42 @@ local function label(parent, font, x, y, width)
     text:SetWidth(width)
     text:SetJustifyH("LEFT")
     return text
+end
+
+local function sizeText(text, size)
+    local file, _, flags = text:GetFont()
+    if file then text:SetFont(file, size, flags or "") end
+end
+
+function refreshOwnerBanner(frame, zone)
+    local banner, owner = frame.ownerBanner, zone and zone.owner
+    banner:SetShown(owner ~= nil)
+    frame.ownerStatus:SetShown(owner == nil)
+    if not owner then
+        frame.status:SetText(ownerName(zone))
+        if zone then frame.status:SetTextColor(territoryTint(zone))
+        else frame.status:SetTextColor(unpack(sides.empty.color)) end
+        return
+    end
+
+    banner.name:SetText(owner.name)
+    sizeText(banner.name, 17)
+    local nameWidth = banner.name.GetUnboundedStringWidth and banner.name:GetUnboundedStringWidth()
+        or banner.name:GetStringWidth()
+    if nameWidth > banner.name:GetWidth() then
+        sizeText(banner.name, math.max(10, math.floor(17 * banner.name:GetWidth() / nameWidth)))
+    end
+    banner.kills:SetText(L["Добивания гильдии: %d"]:format(zone.ownerKills or 0))
+
+    local cache = tabardCache()
+    local crest = cache and cache[owner.faction .. ":" .. owner.id]
+    banner.crestField:SetShown(crest ~= nil)
+    banner.crest:SetShown(crest ~= nil)
+    if not crest then return end
+    banner.crestField:SetVertexColor(unpack(crest.background))
+    banner.crest:SetTexture(crest.file)
+    banner.crest:SetTexCoord(0, 0.5, 0.5, 1)
+    banner.crest:SetVertexColor(unpack(crest.emblem))
 end
 
 local function button(parent, caption, x, y, width, action)
@@ -808,6 +848,7 @@ function note.RefreshTerritories()
             row.name:SetText(zoneName(data))
             row.count:SetText(tostring(data.ownerKills or 0))
             row.tint:SetShown(data == zone)
+            row.guildEdge:SetShown(data == zone and data.owner ~= nil)
         end
     end
     window.page:SetText(("%d / %d"):format(page, pages))
@@ -815,10 +856,7 @@ function note.RefreshTerritories()
     window.next:SetEnabled(page < pages)
     window.openAll:SetEnabled(#zones > 0 and note.OpenAllRecords ~= nil)
     window.selection:SetText(zone and zoneName(zone) or L["За эту неделю пока нет боёв с известной зоной."])
-    local kills = zone and zone.ownerKills or 0
-    window.status:SetText(ownerName(zone) .. (kills > 0 and ("  ·  %d"):format(kills) or ""))
-    if zone then window.status:SetTextColor(territoryTint(zone))
-    else window.status:SetTextColor(unpack(sides.empty.color)) end
+    refreshOwnerBanner(window, zone)
     window.horde:SetText(tostring(zone and zone.Horde or 0))
     window.alliance:SetText(tostring(zone and zone.Alliance or 0))
     window.topKiller:SetText(topKillerText(zone))
@@ -928,24 +966,30 @@ function note.BuildEmbeddedTerritories(parent)
     local panel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     panel:SetPoint("TOPLEFT", 487, -55)
     panel:SetSize(255, 348)
-    note.WarTable.Panel(panel, 0.124, 0.087, 0.061)
-    label(panel, "GameFontNormal", 12, -12, 183):SetText(L["Зона"])
-    local scoreHeader = label(panel, "GameFontHighlightSmall", 139, -13, 102)
+    note.WarTable.Panel(panel, 0.077, 0.054, 0.041)
+    label(panel, "GameFontNormal", 16, -10, 162):SetText(L["Зона"])
+    local scoreHeader = label(panel, "GameFontHighlightSmall", 139, -11, 99)
     scoreHeader:SetText(L["Добивания"])
     scoreHeader:SetJustifyH("RIGHT")
     frame.rows = {}
     for i = 1, pageSize do
         local row = CreateFrame("Button", nil, panel)
-        row:SetPoint("TOPLEFT", 8, -26 - (i - 1) * 22)
-        row:SetSize(239, 21)
+        row:SetPoint("TOPLEFT", 11, -25 - (i - 1) * 15)
+        row:SetSize(231, 15)
         row.tint = row:CreateTexture(nil, "BACKGROUND")
         row.tint:SetAllPoints()
         row.tint:SetColorTexture(0.36, 0.23, 0.089, 0.93)
+        row.guildEdge = row:CreateTexture(nil, "ARTWORK")
+        row.guildEdge:SetPoint("TOPLEFT", 0, -1)
+        row.guildEdge:SetPoint("BOTTOMLEFT", 0, 1)
+        row.guildEdge:SetWidth(2)
+        row.guildEdge:SetColorTexture(0.20, 0.78, 0.95)
+        row.guildEdge:Hide()
         row:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2")
-        row.name = label(row, "GameFontHighlightSmall", 5, -5, 154)
+        row.name = label(row, "GameFontHighlightSmall", 7, -2, 154)
         row.name:SetWordWrap(false)
-        row.count = label(row, "GameFontHighlightSmall", 163, -3, 68)
-        note.StyleMapNumber(row.count, 14)
+        row.count = label(row, "GameFontHighlightSmall", 162, -1, 61)
+        note.StyleMapNumber(row.count, 13)
         row.count:SetTextColor(1, 0.92, 0.73)
         row.count:SetJustifyH("RIGHT")
         registerZone(row)
@@ -958,28 +1002,62 @@ function note.BuildEmbeddedTerritories(parent)
         row:HookScript("OnLeave", function() updateHover(canvas) end)
         frame.rows[i] = row
     end
-    frame.previous = button(panel, "<", 9, -160, 32, function() page = page - 1; note.RefreshTerritories() end)
-    frame.next = button(panel, ">", 94, -160, 32, function() page = page + 1; note.RefreshTerritories() end)
+    frame.previous = button(panel, "<", 14, -118, 23, function() page = page - 1; note.RefreshTerritories() end)
+    frame.next = button(panel, ">", 101, -118, 23, function() page = page + 1; note.RefreshTerritories() end)
     if note.StylePageButton then
         note.StylePageButton(frame.previous, "prev")
         note.StylePageButton(frame.next, "next")
     end
-    frame.page = label(panel, "GameFontHighlightSmall", 43, -166, 49)
+    frame.page = label(panel, "GameFontHighlightSmall", 38, -124, 61)
     frame.page:SetJustifyH("CENTER")
-    frame.openAll = button(panel, L["Открыть все"], 134, -160, 111, function()
+    frame.openAll = button(panel, L["Открыть все"], 139, -118, 103, function()
         note.OpenTerritoryRecords(L["Карта территорий"], frame.source:GetText(), scores[continent],
             (page - 1) * pageSize + 1, function(zone) selectZone(zone.key) end)
     end)
-    frame.selection = label(panel, "GameFontNormal", 13, -192, 226)
-    frame.selection:SetMaxLines(2)
-    label(panel, "GameFontHighlightSmall", 13, -218, 227):SetText(L["Гильдия-владелец"])
-    frame.status = label(panel, "GameFontNormal", 13, -232, 227)
+    frame.selection = label(panel, "GameFontNormal", 16, -143, 224)
+    note.StyleHeadingFont(frame.selection)
+    sizeText(frame.selection, 16)
+    frame.selection:SetWordWrap(false)
+
+    local banner = CreateFrame("Frame", nil, panel)
+    banner:SetPoint("TOPLEFT", 11, -161)
+    banner:SetSize(234.5, 61)
+    banner:Hide()
+    frame.ownerBanner = banner
+    local plate = banner:CreateTexture(nil, "BACKGROUND")
+    plate:SetAllPoints()
+    plate:SetTexture(ownerBannerArt)
+    plate:SetTexCoord(0, 469 / 512, 0, 122 / 256)
+    banner.crestField = banner:CreateTexture(nil, "ARTWORK")
+    banner.crestField:SetPoint("TOPLEFT", 22, -5)
+    banner.crestField:SetSize(44, 51)
+    banner.crestField:SetTexture(ownerBannerArt)
+    banner.crestField:SetTexCoord(0, 88 / 512, 128 / 256, 230 / 256)
+    banner.crest = banner:CreateTexture(nil, "OVERLAY")
+    banner.crest:SetSize(27, 27)
+    banner.crest:SetPoint("CENTER", banner.crestField, "CENTER", 0, 1)
+    local caption = label(banner, "GameFontHighlightSmall", 78, -7, 148)
+    caption:SetText(L["Контроль территории"])
+    caption:SetTextColor(0.88, 0.76, 0.56)
+    caption:SetWordWrap(false)
+    banner.name = label(banner, "GameFontNormalLarge", 77, -19, 151)
+    banner.name:SetTextColor(0.45, 0.81, 0.98)
+    banner.name:SetWordWrap(false)
+    banner.kills = label(banner, "GameFontHighlightSmall", 79, -42, 146)
+    banner.kills:SetTextColor(0.92, 0.83, 0.69)
+    banner.kills:SetWordWrap(false)
+
+    frame.ownerStatus = CreateFrame("Frame", nil, panel)
+    frame.ownerStatus:SetAllPoints(banner)
+    label(frame.ownerStatus, "GameFontHighlightSmall", 5, -10, 218):SetText(L["Гильдия-владелец"])
+    frame.status = label(frame.ownerStatus, "GameFontNormal", 5, -25, 218)
     frame.status:SetWordWrap(false)
     for i, faction in ipairs({ { "Horde", "Орда", "horde" }, { "Alliance", "Альянс", "alliance" } }) do
         local field = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-        field:SetSize(112, 40)
-        field:SetPoint("TOPLEFT", 12 + (i - 1) * 118, -248)
-        note.WarTable.Panel(field, 0.085, 0.061, 0.045)
+        field:SetSize(110, 39)
+        field:SetPoint("TOPLEFT", 14 + (i - 1) * 117, -229)
+        if i == 1 then note.WarTable.Panel(field, 0.22, 0.077, 0.052)
+        else note.WarTable.Panel(field, 0.053, 0.091, 0.16) end
         local crest = field:CreateTexture(nil, "ARTWORK")
         crest:SetSize(24, 24)
         crest:SetPoint("LEFT", 6, 0)
@@ -993,13 +1071,13 @@ function note.BuildEmbeddedTerritories(parent)
         value:SetTextColor(1, 0.97, 0.87)
         frame[faction[3]] = value
     end
-    label(panel, "GameFontHighlightSmall", 13, -291, 226):SetText(L["Лидер по добиваниям"])
-    frame.topKiller = label(panel, "GameFontHighlightSmall", 13, -304, 226)
+    label(panel, "GameFontHighlightSmall", 16, -279, 70):SetText(L["Лидер по добиваниям"])
+    frame.topKiller = label(panel, "GameFontHighlightSmall", 88, -279, 148)
     frame.topKiller:SetWordWrap(false)
-    frame.log = button(panel, L["Журнал зоны"], 8, -318, 116, function()
+    frame.log = button(panel, L["Журнал зоны"], 11, -303, 114, function()
         if frame.zone and frame.zone.count > 0 then note.OpenFrontJournal(sample, frame.zone) end
     end)
-    frame.pinMap = button(panel, L["Карта зоны"], 129, -318, 116, function()
+    frame.pinMap = button(panel, L["Карта зоны"], 132, -303, 113, function()
         if frame.zone and frame.zone.pin then note.OpenFightMap(sample, frame.zone.pin, frame.zone) end
     end)
     local legend = label(frame, "GameFontHighlightSmall", 4, -380, 306)

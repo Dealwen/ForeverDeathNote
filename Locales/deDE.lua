@@ -1,5 +1,7 @@
 local _, note = ...
 note.translations.deDE = {
+    ["Контроль территории"] = "KONTROLLIERT VON",
+    ["Добивания гильдии: %d"] = "%d Gilden-Kills",
     ["Экспорт для сайта"] = "Für Website exportieren",
     ["Скопируйте для сайта: %d игроков, %d гильдий, %d зон."] = "Für die Website kopieren: %d Spieler, %d Gilden, %d Gebiete.",
     ["Скопируйте снимок и вставьте его на сайте."] = "Kopiere den Datenstand und füge ihn auf der Website ein.",

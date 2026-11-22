@@ -1,6 +1,6 @@
 # Тетрадь смерти для WoW Forever
 
-Версия 2.10.2 для WoW Forever 1.60.1 (Interface 16001).
+Версия 2.10.3 для WoW Forever 1.60.1 (Interface 16001).
 
 1. Положите папку `ForeverDeathNote` в `World of Warcraft/_forever_/Interface/AddOns`.
 2. Запустите клиент и проверьте, что аддон включён в списке модификаций.
