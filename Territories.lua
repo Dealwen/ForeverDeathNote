@@ -4,13 +4,12 @@ local window, sample, catalog
 local refreshOwnerBanner
 local scores, shared
 local hoverID, hoverRegion, hoverZone
-local continent, selected, page = nil, nil, 1
+local continent, selected
 local requestedZone
 local regions = {
     { id = 1414, name = "Калимдор" },
     { id = 1415, name = "Восточные королевства" },
 }
-local pageSize = 6
 local sides = {
     Horde = { color = { 1, 0.42, 0.31 } },
     Alliance = { color = { 0.38, 0.67, 1 } },
@@ -376,22 +375,13 @@ local function hideTooltip(control)
 end
 
 local function selectZone(id)
-    for i, zone in ipairs(scores[continent]) do
+    for _, zone in ipairs(scores[continent]) do
         if zone.key == id then
-            selected, page = id, math.ceil(i / pageSize)
+            selected = id
             note.RefreshTerritories()
             return
         end
     end
-end
-
-local function registerZone(control)
-    control:SetScript("OnClick", function(self)
-        if self.zone then selectZone(self.zone.key) end
-    end)
-    control:SetScript("OnEnter", function(self) tooltip(self) end)
-    control:SetScript("OnLeave", hideTooltip)
-    control:SetScript("OnHide", hideTooltip)
 end
 
 local updateHover, wireMapInput
@@ -432,7 +422,7 @@ local function markerFor(canvas, index)
     note.StyleMapNumber(marker.count, 15)
     marker.count:SetPoint("CENTER", marker.badge, "CENTER", 0, 1)
     marker.count:SetJustifyH("CENTER")
-    registerZone(marker)
+    marker:SetScript("OnHide", hideTooltip)
     marker:SetScript("OnClick", function(self)
         if self.zone and not self.mapDragged and canvas.viewport:IsMouseOver() then
             selectZone(self.zone.key)
@@ -808,14 +798,14 @@ function note.RefreshTerritories()
     if note.RefreshGuildTerritoryStats then note.RefreshGuildTerritoryStats() end
     if not window or not window:IsVisible() then return end
     local demo = note.DemoData()
-    if demo ~= sample then sample, continent, selected, page = demo, nil, nil, 1 end
+    if demo ~= sample then sample, continent, selected = demo, nil, nil end
     local total
     total, scores = collect(sample, shared)
     if requestedZone then
         for _, region in ipairs(regions) do
-            for index, zone in ipairs(scores[region.id]) do
+            for _, zone in ipairs(scores[region.id]) do
                 if zone.key == requestedZone then
-                    continent, selected, page = region.id, zone.key, math.ceil(index / pageSize)
+                    continent, selected = region.id, zone.key
                     break
                 end
             end
@@ -829,17 +819,15 @@ function note.RefreshTerritories()
         continent = eastCount > westCount and 1415 or 1414
     end
     local zones = scores[continent]
-    local location
-    for i, zone in ipairs(zones) do
-        if zone.key == selected then location = i; break end
+    local zone
+    for _, candidate in ipairs(zones) do
+        if candidate.key == selected then
+            zone = candidate
+            break
+        end
     end
-    if not location then
-        location = #zones > 0 and 1 or nil
-        selected, page = location and zones[location].key or nil, 1
-    end
-    local pages = math.max(1, math.ceil(#zones / pageSize))
-    page = math.max(1, math.min(pages, page))
-    local zone = location and zones[location]
+    zone = zone or zones[1]
+    selected = zone and zone.key
     window.zone = zone
     local source = shared and (L["Общий счёт"] .. " · " .. L["От других игроков: %d"]:format(total.shared))
         or L["Личный журнал"]
@@ -857,21 +845,6 @@ function note.RefreshTerritories()
         note.TintWarcraftButton(window.mine, not shared)
         note.TintWarcraftButton(window.community, shared)
     end
-    for i, row in ipairs(window.rows) do
-        local data = zones[(page - 1) * pageSize + i]
-        row.zone = data
-        row:SetShown(data ~= nil)
-        if data then
-            row.name:SetText(zoneName(data))
-            row.count:SetText(tostring(data.ownerKills or 0))
-            row.tint:SetShown(data == zone)
-            row.guildEdge:SetShown(data == zone and data.owner ~= nil)
-        end
-    end
-    window.page:SetText(("%d / %d"):format(page, pages))
-    window.previous:SetEnabled(page > 1)
-    window.next:SetEnabled(page < pages)
-    window.openAll:SetEnabled(#zones > 0 and note.OpenAllRecords ~= nil)
     window.selection:SetText(zone and zoneName(zone) or L["За эту неделю пока нет боёв с известной зоной."])
     refreshOwnerBanner(window, zone)
     window.horde:SetText(tostring(zone and zone.Horde or 0))
@@ -890,7 +863,7 @@ function note.BuildEmbeddedTerritories(parent)
     frame:Hide()
     frame.source = label(frame, "GameFontHighlightSmall", 5, -6, 565)
     local function changeSource(useShared)
-        shared, page = useShared, 1
+        shared = useShared
         note.db.territoryMode = useShared and "shared" or "personal"
         note.RefreshTerritories()
     end
@@ -902,7 +875,7 @@ function note.BuildEmbeddedTerritories(parent)
     frame.tabs = {}
     for i, region in ipairs(regions) do
         frame.tabs[region.id] = button(frame, L[region.name], i == 1 and 0 or 144, -28, i == 1 and 136 or 163, function()
-            continent, selected, page = region.id, nil, 1
+            continent, selected = region.id, nil
             note.RefreshTerritories()
         end)
     end
@@ -979,71 +952,19 @@ function note.BuildEmbeddedTerritories(parent)
     frame.canvas = canvas
     frame.missing = label(host, "GameFontHighlight", 22, -134, 433)
     frame.missing:SetJustifyH("CENTER")
-    frame.missing:SetText(L["Карта континента недоступна. Выберите зону справа."])
+    frame.missing:SetText(L["Карта континента недоступна."])
 
     local panel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     panel:SetPoint("TOPLEFT", 487, -55)
-    panel:SetSize(255, 348)
+    panel:SetSize(255, 218)
     note.WarTable.Panel(panel, 0.077, 0.054, 0.041)
-    label(panel, "GameFontNormal", 16, -10, 162):SetText(L["Зона"])
-    local scoreHeader = label(panel, "GameFontHighlightSmall", 139, -11, 99)
-    scoreHeader:SetText(L["Добивания"])
-    scoreHeader:SetJustifyH("RIGHT")
-    frame.rows = {}
-    for i = 1, pageSize do
-        local row = CreateFrame("Button", nil, panel)
-        row:SetPoint("TOPLEFT", 11, -25 - (i - 1) * 15)
-        row:SetSize(231, 15)
-        row.tint = row:CreateTexture(nil, "BACKGROUND")
-        row.tint:SetAllPoints()
-        row.tint:SetColorTexture(0.36, 0.23, 0.089, 0.93)
-        local divider = row:CreateTexture(nil, "ARTWORK")
-        divider:SetPoint("BOTTOMLEFT")
-        divider:SetPoint("BOTTOMRIGHT")
-        divider:SetHeight(1)
-        divider:SetColorTexture(0.65, 0.49, 0.29, 0.19)
-        row.guildEdge = row:CreateTexture(nil, "ARTWORK")
-        row.guildEdge:SetPoint("TOPLEFT", 0, -1)
-        row.guildEdge:SetPoint("BOTTOMLEFT", 0, 1)
-        row.guildEdge:SetWidth(2)
-        row.guildEdge:SetColorTexture(0.20, 0.78, 0.95)
-        row.guildEdge:Hide()
-        row:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2")
-        row.name = label(row, "GameFontHighlightSmall", 7, -2, 154)
-        row.name:SetWordWrap(false)
-        row.count = label(row, "GameFontHighlightSmall", 162, -1, 61)
-        note.StyleMapNumber(row.count, 13)
-        row.count:SetTextColor(1, 0.92, 0.73)
-        row.count:SetJustifyH("RIGHT")
-        registerZone(row)
-        row:HookScript("OnEnter", function(self)
-            if not self.zone or not canvas:IsShown() then return end
-            local x, y
-            if type(self.zone.key) == "number" then x, y = mapCenter(self.zone.key, continent) end
-            updateHover(canvas, self.zone, x, y)
-        end)
-        row:HookScript("OnLeave", function() updateHover(canvas) end)
-        frame.rows[i] = row
-    end
-    frame.previous = button(panel, "<", 14, -118, 23, function() page = page - 1; note.RefreshTerritories() end)
-    frame.next = button(panel, ">", 101, -118, 23, function() page = page + 1; note.RefreshTerritories() end)
-    if note.StylePageButton then
-        note.StylePageButton(frame.previous, "prev")
-        note.StylePageButton(frame.next, "next")
-    end
-    frame.page = label(panel, "GameFontHighlightSmall", 38, -124, 61)
-    frame.page:SetJustifyH("CENTER")
-    frame.openAll = button(panel, L["Открыть все"], 139, -118, 103, function()
-        note.OpenTerritoryRecords(L["Карта территорий"], frame.source:GetText(), scores[continent],
-            (page - 1) * pageSize + 1, function(zone) selectZone(zone.key) end)
-    end)
-    frame.selection = label(panel, "GameFontNormal", 16, -142, 224)
+    frame.selection = label(panel, "GameFontNormal", 16, -12, 224)
     sizeText(frame.selection, 16)
     frame.selection:SetTextColor(1, 0.84, 0.49)
     frame.selection:SetWordWrap(false)
 
     local banner = CreateFrame("Frame", nil, panel)
-    banner:SetPoint("TOPLEFT", 11, -163)
+    banner:SetPoint("TOPLEFT", 11, -33)
     banner:SetSize(234.5, 61)
     banner:Hide()
     frame.ownerBanner = banner
@@ -1081,7 +1002,7 @@ function note.BuildEmbeddedTerritories(parent)
     for i, faction in ipairs({ { "Horde", "Орда", "horde" }, { "Alliance", "Альянс", "alliance" } }) do
         local field = CreateFrame("Frame", nil, panel, "BackdropTemplate")
         field:SetSize(110, 39)
-        field:SetPoint("TOPLEFT", 14 + (i - 1) * 117, -229)
+        field:SetPoint("TOPLEFT", 14 + (i - 1) * 117, -99)
         if i == 1 then note.WarTable.Panel(field, 0.22, 0.077, 0.052)
         else note.WarTable.Panel(field, 0.053, 0.091, 0.16) end
         local crest = field:CreateTexture(nil, "ARTWORK")
@@ -1097,10 +1018,10 @@ function note.BuildEmbeddedTerritories(parent)
         value:SetTextColor(1, 0.97, 0.87)
         frame[faction[3]] = value
     end
-    local killerLabel = label(panel, "GameFontHighlightSmall", 16, -281, 70)
+    local killerLabel = label(panel, "GameFontHighlightSmall", 16, -151, 70)
     killerLabel:SetText(L["Лидер по добиваниям"])
     killerLabel:SetTextColor(0.91, 0.79, 0.58)
-    for _, y in ipairs({ -275, -298 }) do
+    for _, y in ipairs({ -145, -168 }) do
         local divider = panel:CreateTexture(nil, "ARTWORK")
         divider:SetPoint("TOPLEFT", 11, y)
         divider:SetSize(234, 1)
@@ -1108,20 +1029,20 @@ function note.BuildEmbeddedTerritories(parent)
     end
     for _, x in ipairs({ 85, 205 }) do
         local divider = panel:CreateTexture(nil, "ARTWORK")
-        divider:SetPoint("TOPLEFT", x, -279)
+        divider:SetPoint("TOPLEFT", x, -149)
         divider:SetSize(1, 15)
         divider:SetColorTexture(0.65, 0.49, 0.29, 0.36)
     end
-    frame.topKiller = label(panel, "GameFontHighlightSmall", 92, -281, 108)
+    frame.topKiller = label(panel, "GameFontHighlightSmall", 92, -151, 108)
     frame.topKiller:SetWordWrap(false)
-    frame.topKillerCount = label(panel, "GameFontHighlightSmall", 210, -279, 28)
+    frame.topKillerCount = label(panel, "GameFontHighlightSmall", 210, -149, 28)
     frame.topKillerCount:SetJustifyH("RIGHT")
     frame.topKillerCount:SetTextColor(1, 0.92, 0.73)
     note.StyleMapNumber(frame.topKillerCount, 13)
-    frame.log = button(panel, L["Журнал зоны"], 11, -303, 114, function()
+    frame.log = button(panel, L["Журнал зоны"], 11, -173, 114, function()
         if frame.zone and frame.zone.count > 0 then note.OpenFrontJournal(sample, frame.zone) end
     end)
-    frame.pinMap = button(panel, L["Карта зоны"], 132, -303, 113, function()
+    frame.pinMap = button(panel, L["Карта зоны"], 132, -173, 113, function()
         if frame.zone and frame.zone.pin then note.OpenFightMap(sample, frame.zone.pin, frame.zone) end
     end)
     local legend = label(frame, "GameFontHighlightSmall", 4, -380, 306)
