@@ -69,18 +69,27 @@ function note.ExportWebSnapshot()
 
     local players, _, rosters = note.Ranking(nil, nil, true)
     for _, player in ipairs(players) do
+        local profile = player.profile or {}
         snapshot.players[#snapshot.players + 1] = {
             id = playerKey(realm, player.id), name = note.Text(player.name) or "Unknown",
             class = note.Class(player.class), guild = note.Text(player.guild), faction = rankingFaction(player.faction),
             kills = player.kills, deaths = player.deaths, uniqueVictims = #player.victims,
+            race = note.Text(profile.race), level = note.PositiveInteger(profile.level, 100),
         }
     end
     for _, guild in ipairs(note.GuildRanking(players, rosters)) do
         local id, name = note.Text(guild.id), note.Text(guild.name)
         if id and name then
+            local topPlayers = {}
+            for _, member in ipairs(note.GuildKillLeaders(guild)) do
+                topPlayers[#topPlayers + 1] = {
+                    id = playerKey(realm, member.id), kills = member.kills, deaths = member.deaths,
+                }
+            end
             snapshot.guilds[#snapshot.guilds + 1] = {
                 id = id, name = name, faction = rankingFaction(guild.faction),
-                kills = guild.kills, deaths = guild.deaths, members = #guild.members, rosterCount = guild.rosterCount,
+                kills = guild.kills, deaths = guild.deaths, members = #guild.members,
+                rosterCount = guild.rosterCount, topPlayers = topPlayers,
             }
         end
     end
