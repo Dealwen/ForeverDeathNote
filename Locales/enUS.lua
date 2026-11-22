@@ -5,6 +5,10 @@ note.translations.enUS = {
     ["Скопируйте снимок и вставьте его на сайте."] = "Copy the snapshot and paste it into the website.",
     ["Автоснимок: вкл."] = "Auto snapshot: on",
     ["Автоснимок: выкл."] = "Auto snapshot: off",
+    ["PvP-карта: вкл."] = "PvP map: on",
+    ["PvP-карта: выкл."] = "PvP map: off",
+    ["Готовит будущие PvP-убийства открытого мира для отправки на сайт через Sync после выхода или /reload."] =
+        "Queues new open-world PvP kills for the Sync app to upload after logout or /reload.",
     ["Сохраняет снимок при выходе и /reload для локального помощника."] = "Saves a snapshot on logout and /reload for the local helper.",
     ["Добивание записано"] = "Kill Recorded",
     ["Добил"] = "Killer",

@@ -35,6 +35,70 @@ local function playerKey(realm, id)
     return ("p-%08x%08x"):format(first, second)
 end
 
+local mapReportLimit = 2000
+local mapReportAge = 30 * 86400
+
+local function mapPlayerKey(realm, guid)
+    return playerKey(realm, "Player-" .. guid:sub(8):upper())
+end
+
+function note.MapSyncEnabled()
+    return ForeverDeathNoteDB.mapSyncEnabled == true
+end
+
+function note.SetMapSync(enabled)
+    local root = ForeverDeathNoteDB
+    if enabled then
+        root.mapSyncEnabled = true
+    else
+        root.mapSyncEnabled, root.mapObservations, ForeverDeathNoteMapExport = nil, nil, nil
+    end
+    if note.RefreshMapSyncOption then note.RefreshMapSyncOption() end
+end
+
+local function mapCoordinate(value)
+    if type(value) == "number" and value >= 0 and value <= 100 then
+        return math.floor(value * 100 + 0.5)
+    end
+end
+
+function note.RecordMapObservation(entry)
+    local root = ForeverDeathNoteDB
+    if not root.mapSyncEnabled or (entry.kind ~= "K" and entry.kind ~= "D") then return end
+    local region = note.PositiveInteger(GetCurrentRegion(), 5)
+    local realm = note.Text(GetRealmName())
+    if not region or not realm then return end
+    local kill = entry.kind == "K"
+    local killer, victim = kill and note.owner or entry.other, kill and entry.other or note.owner
+    local mapId = note.PositiveInteger(entry.mapId, 1000000)
+    local x, y = mapCoordinate(entry.x), mapCoordinate(entry.y)
+    local rows = root.mapObservations or {}
+    root.mapObservations = rows
+    rows[#rows + 1] = {
+        region = region, realm = realm, at = entry.at, kind = entry.kind,
+        killerId = mapPlayerKey(realm, killer), victimId = mapPlayerKey(realm, victim),
+        killer = note.Text(note.Profile(killer).name), victim = note.Text(note.Profile(victim).name),
+        killerFaction = kill and entry.ownerFaction or (not kill and entry.otherFaction or nil),
+        mapId = mapId, zone = note.Text(entry.zone),
+        x = mapId and x and y and x or nil, y = mapId and x and y and y or nil,
+    }
+    if #rows > mapReportLimit then table.remove(rows, 1) end
+end
+
+local function saveMapObservations()
+    local root = ForeverDeathNoteDB
+    if not root or not root.mapSyncEnabled then
+        ForeverDeathNoteMapExport = nil
+        return
+    end
+    local cutoff, rows = GetServerTime() - mapReportAge, {}
+    for _, row in ipairs(root.mapObservations or {}) do
+        if row.at >= cutoff then rows[#rows + 1] = row end
+    end
+    root.mapObservations = rows
+    ForeverDeathNoteMapExport = "FDNPVP1\n" .. encode({ version = 1, reports = rows })
+end
+
 local function rankingFaction(faction)
     return faction == "Mixed" and faction or note.Faction(faction)
 end
@@ -102,6 +166,7 @@ function note.WebAutosaveEnabled()
 end
 
 local function save()
+    saveMapObservations()
     if not note.db or not note.WebAutosaveEnabled() then return end
     ForeverDeathNoteWebSnapshot = note.ExportWebSnapshot()
 end

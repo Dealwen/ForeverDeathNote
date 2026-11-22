@@ -1180,8 +1180,16 @@ local function buildSettings()
     updateZoneSharing()
     textHint(zoneSharing, L["Обмен по зонам в гильдии, группе и рейде."])
 
-    local hint = label(transfer, "GameFontHighlightSmall", 700, 16, -100)
+    local hint = label(transfer, "GameFontHighlightSmall", 460, 16, -95)
     hint:SetText(L["Для обмена вне гильдии скопируйте экспорт. Для импорта вставьте полученные записи того же мира."])
+    local mapSync = button(transfer, "", 197, 490, -91, function()
+        note.SetMapSync(not note.MapSyncEnabled())
+    end)
+    function note.RefreshMapSyncOption()
+        mapSync:SetText(L[note.MapSyncEnabled() and "PvP-карта: вкл." or "PvP-карта: выкл."])
+    end
+    note.RefreshMapSyncOption()
+    textHint(mapSync, L["Готовит будущие PvP-убийства открытого мира для отправки на сайт через Sync после выхода или /reload."])
     local scroll = CreateFrame("ScrollFrame", nil, transfer, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 16, -132)
     local editHeight = 151
@@ -2144,6 +2152,13 @@ SLASH_FOREVER_DEATH_NOTE1 = "/deathnote"
 SLASH_FOREVER_DEATH_NOTE2 = "/fdn"
 SlashCmdList.FOREVER_DEATH_NOTE = function(message)
     if not note.db then return end
+    local mapSyncOption = message and message:match("^%s*mapsync%s+(%w+)%s*$")
+    if mapSyncOption or (message and message:match("^%s*mapsync%s*$")) then
+        if mapSyncOption == "on" or mapSyncOption == "off" then note.SetMapSync(mapSyncOption == "on") end
+        print("Forever Death Note · " .. L[note.MapSyncEnabled() and "PvP-карта: вкл." or "PvP-карта: выкл."]
+            .. " · /fdn mapsync on | off")
+        return
+    end
     local command = message and message:match("^%s*(%w+)%s*$")
     if command == "help" then
         note.OpenGuide()

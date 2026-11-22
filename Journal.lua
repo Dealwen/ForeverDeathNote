@@ -137,6 +137,7 @@ function note.Record(kind, other, place)
     place.ownerFaction = note.Profile(note.owner).faction
     place.otherFaction = note.Profile(other).faction
     events[#events + 1] = place
+    if note.RecordMapObservation then note.RecordMapObservation(place) end
     if note.HuntRecord then note.HuntRecord(place) end
     if note.RecordRampage then note.RecordRampage(place) end
     if note.RecordLadderAchievement then note.RecordLadderAchievement(place) end
