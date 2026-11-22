@@ -337,7 +337,7 @@ local function registerZone(control)
     control:SetScript("OnHide", hideTooltip)
 end
 
-local updateHover
+local updateHover, wireMapInput
 local function markerFor(canvas, index)
     local marker = canvas.markers[index]
     if marker then return marker end
@@ -376,7 +376,13 @@ local function markerFor(canvas, index)
     marker.count:SetPoint("CENTER", marker.badge, "CENTER", 0, 1)
     marker.count:SetJustifyH("CENTER")
     registerZone(marker)
+    marker:SetScript("OnClick", function(self)
+        if self.zone and not self.mapDragged and canvas.viewport:IsMouseOver() then
+            selectZone(self.zone.key)
+        end
+    end)
     marker:SetScript("OnEnter", function(self)
+        if canvas.drag or not canvas.viewport:IsMouseOver() then return end
         tooltip(self)
         local x, y = mapCenter(self.zone.key, continent)
         updateHover(canvas, self.zone, x, y)
@@ -385,6 +391,7 @@ local function markerFor(canvas, index)
         hideTooltip(self)
         updateHover(canvas)
     end)
+    wireMapInput(marker, canvas)
     canvas.markers[index] = marker
     return marker
 end
@@ -400,13 +407,34 @@ local function drawTerritoryTerrain(canvas)
         canvas.terrainMap = continent
         for _, tile in ipairs(canvas.tiles) do tile:Hide() end
         canvas.ready = nil
-        local width = math.min(canvas.host:GetWidth() - 10, (canvas.host:GetHeight() - 10) * 1.5)
-        canvas:SetSize(width, width / 1.5)
+        local width = math.min(canvas.viewport:GetWidth(), canvas.viewport:GetHeight() * 1.5)
+        canvas.baseWidth, canvas.baseHeight = width, width / 1.5
         -- The projected artwork is stored at 1024x1024 for the game texture loader.
         canvas.terrain:SetTexCoord(0, 1, 0, 683 / 1024)
         canvas.terrain:Show()
     end
     return true
+end
+
+local function mapOffset(offset, viewportSize, mapSize)
+    if mapSize <= viewportSize then return (viewportSize - mapSize) / 2 end
+    return math.max(viewportSize - mapSize, math.min(0, offset or 0))
+end
+
+local function positionMap(canvas, x, y)
+    local viewport = canvas.viewport
+    canvas.offsetX = mapOffset(x, viewport:GetWidth(), canvas:GetWidth())
+    canvas.offsetY = mapOffset(y, viewport:GetHeight(), canvas:GetHeight())
+    canvas:ClearAllPoints()
+    canvas:SetPoint("TOPLEFT", viewport, "TOPLEFT", canvas.offsetX, -canvas.offsetY)
+end
+
+local function viewportCursor(viewport)
+    local left, top = viewport:GetLeft(), viewport:GetTop()
+    if not left or not top then return end
+    local x, y = GetCursorPosition()
+    local scale = viewport:GetEffectiveScale()
+    return x / scale - left, top - y / scale
 end
 
 -- World Map highlights can have black padding. Additive blending keeps it invisible.
@@ -523,7 +551,21 @@ end
 local function refreshMap(zones)
     local canvas = window.canvas
     updateHover(canvas)
+    if canvas.cameraMap ~= continent then
+        canvas.cameraMap, canvas.zoom, canvas.offsetX, canvas.offsetY = continent, 1, nil, nil
+        canvas.drag = nil
+    end
     local hasArt = drawTerritoryTerrain(canvas)
+    if canvas.terrainMap then
+        canvas:SetSize(canvas.baseWidth * canvas.zoom, canvas.baseHeight * canvas.zoom)
+    else
+        canvas.zoom = 1
+    end
+    positionMap(canvas, canvas.offsetX, canvas.offsetY)
+    canvas.zoomOut:SetEnabled(canvas.terrainMap ~= nil and canvas.zoom > 1)
+    canvas.zoomIn:SetEnabled(canvas.terrainMap ~= nil and canvas.zoom < 4)
+    canvas.zoomReset:SetEnabled(canvas.terrainMap ~= nil and canvas.zoom > 1)
+    canvas.zoomReset:SetText(("%d%%"):format(math.floor(canvas.zoom * 100 + 0.5)))
     canvas:SetShown(hasArt == true)
     window.missing:SetShown(not hasArt)
 
@@ -607,6 +649,43 @@ local function refreshMap(zones)
         canvas.markers[i].tint:Hide()
         canvas.markers[i].border:Hide()
     end
+end
+
+local function zoomMap(canvas, zoom, x, y)
+    if not canvas.terrainMap or not scores or canvas.drag then return end
+    zoom = math.max(1, math.min(4, zoom))
+    if zoom == canvas.zoom then return end
+    x, y = x or canvas.viewport:GetWidth() / 2, y or canvas.viewport:GetHeight() / 2
+    local ratio = zoom / canvas.zoom
+    canvas.offsetX = x - (x - canvas.offsetX) * ratio
+    canvas.offsetY = y - (y - canvas.offsetY) * ratio
+    canvas.zoom = zoom
+    hideTooltip(canvas)
+    for _, marker in ipairs(canvas.markers) do hideTooltip(marker) end
+    refreshMap(scores[continent])
+end
+
+wireMapInput = function(control, canvas)
+    control:EnableMouseWheel(true)
+    control:RegisterForDrag("LeftButton")
+    control:HookScript("OnMouseDown", function(self, mouseButton)
+        if mouseButton == "LeftButton" then self.mapDragged = nil end
+    end)
+    control:SetScript("OnMouseWheel", function(_, delta)
+        if not canvas.viewport:IsMouseOver() then return end
+        zoomMap(canvas, canvas.zoom * 1.25 ^ delta, viewportCursor(canvas.viewport))
+    end)
+    control:SetScript("OnDragStart", function(self)
+        if canvas.zoom <= 1 or not canvas.viewport:IsMouseOver() then return end
+        local x, y = viewportCursor(canvas.viewport)
+        if not x then return end
+        self.mapDragged = true
+        canvas.drag = { x = x, y = y, offsetX = canvas.offsetX, offsetY = canvas.offsetY }
+        hideTooltip(self)
+        hideTooltip(canvas)
+        updateHover(canvas)
+    end)
+    control:SetScript("OnDragStop", function() canvas.drag = nil end)
 end
 
 function note.TerritoryZoneGroups(useShared)
@@ -776,24 +855,37 @@ function note.BuildEmbeddedTerritories(parent)
     host:SetPoint("TOPLEFT", 0, -55)
     host:SetSize(477, 318)
     note.WarTable.Panel(host, 0.075, 0.052, 0.037)
-    local canvas = CreateFrame("Button", nil, host)
-    canvas:SetPoint("CENTER")
+    local viewport = CreateFrame("Frame", nil, host)
+    viewport:SetPoint("CENTER")
+    viewport:SetSize(467, 308)
+    viewport:SetClipsChildren(true)
+    local canvas = CreateFrame("Button", nil, viewport)
+    canvas:SetPoint("TOPLEFT", viewport, "TOPLEFT")
     canvas:SetSize(467, 308)
-    canvas.host, canvas.tiles, canvas.markers = host, {}, {}
+    canvas.host, canvas.viewport, canvas.tiles, canvas.markers = viewport, viewport, {}, {}
+    canvas.zoom = 1
     canvas.terrain = canvas:CreateTexture(nil, "BACKGROUND")
     canvas.terrain:SetAllPoints()
     canvas.terrain:Hide()
     canvas.hover = canvas:CreateTexture(nil, "ARTWORK", nil, 3)
     canvas.shading, canvas.shapes = {}, {}
     canvas:SetScript("OnClick", function(self)
+        if self.mapDragged or not viewport:IsMouseOver() then return end
         local zone = findZoneAt(cursorMapPoint(self))
         if zone then selectZone(zone.key) end
     end)
     canvas:SetScript("OnUpdate", function(self, elapsed)
+        if self.drag then
+            if not IsMouseButtonDown("LeftButton") then self.drag = nil; return end
+            local x, y = viewportCursor(viewport)
+            local drag = self.drag
+            if x then positionMap(self, drag.offsetX + x - drag.x, drag.offsetY + y - drag.y) end
+            return
+        end
         self.hoverElapsed = (self.hoverElapsed or 0) + elapsed
         if self.hoverElapsed < 0.055 then return end
         self.hoverElapsed = 0
-        if not self:IsMouseOver() then return end
+        if not viewport:IsMouseOver() or not self:IsMouseOver() then return end
         for _, marker in ipairs(self.markers) do
             if marker:IsShown() and marker:IsMouseOver() then
                 if hoverZone ~= marker.zone then
@@ -815,7 +907,19 @@ function note.BuildEmbeddedTerritories(parent)
         hideTooltip(self)
         updateHover(self)
     end)
-    canvas:SetScript("OnHide", hideTooltip)
+    canvas:SetScript("OnHide", function(self)
+        self.drag = nil
+        hideTooltip(self)
+    end)
+    wireMapInput(canvas, canvas)
+
+    local controls = CreateFrame("Frame", nil, host)
+    controls:SetSize(110, 24)
+    controls:SetPoint("TOPRIGHT", -10, -10)
+    controls:SetFrameLevel(canvas:GetFrameLevel() + 8)
+    canvas.zoomOut = button(controls, "−", 0, 0, 26, function() zoomMap(canvas, canvas.zoom / 1.25) end)
+    canvas.zoomReset = button(controls, "100%", 29, 0, 52, function() zoomMap(canvas, 1) end)
+    canvas.zoomIn = button(controls, "+", 84, 0, 26, function() zoomMap(canvas, canvas.zoom * 1.25) end)
     frame.canvas = canvas
     frame.missing = label(host, "GameFontHighlight", 22, -134, 433)
     frame.missing:SetJustifyH("CENTER")
