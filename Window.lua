@@ -2152,6 +2152,12 @@ SLASH_FOREVER_DEATH_NOTE1 = "/deathnote"
 SLASH_FOREVER_DEATH_NOTE2 = "/fdn"
 SlashCmdList.FOREVER_DEATH_NOTE = function(message)
     if not note.db then return end
+    local relay = message and (message:match("^%s*relay%s+(.+)$") or message:match("^%s*(relay)%s*$"))
+    if relay then
+        local action, argument = relay:match("^(%w+)%s*(.-)%s*$")
+        note.MapRelayCommand(action, argument)
+        return
+    end
     local mapSyncOption = message and message:match("^%s*mapsync%s+(%w+)%s*$")
     if mapSyncOption or (message and message:match("^%s*mapsync%s*$")) then
         if mapSyncOption == "on" or mapSyncOption == "off" then note.SetMapSync(mapSyncOption == "on") end

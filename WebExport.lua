@@ -38,7 +38,7 @@ end
 local mapReportLimit = 2000
 local mapReportAge = 30 * 86400
 
-local function mapPlayerKey(realm, guid)
+function note.MapRelayPlayerKey(realm, guid)
     return playerKey(realm, "Player-" .. guid:sub(8):upper())
 end
 
@@ -76,7 +76,7 @@ function note.RecordMapObservation(entry)
     root.mapObservations = rows
     rows[#rows + 1] = {
         region = region, realm = realm, at = entry.at, kind = entry.kind,
-        killerId = mapPlayerKey(realm, killer), victimId = mapPlayerKey(realm, victim),
+        killerId = note.MapRelayPlayerKey(realm, killer), victimId = note.MapRelayPlayerKey(realm, victim),
         killer = note.Text(note.Profile(killer).name), victim = note.Text(note.Profile(victim).name),
         killerFaction = kill and entry.ownerFaction or (not kill and entry.otherFaction or nil),
         mapId = mapId, zone = note.Text(entry.zone),
@@ -87,16 +87,25 @@ end
 
 local function saveMapObservations()
     local root = ForeverDeathNoteDB
-    if not root or not root.mapSyncEnabled then
-        ForeverDeathNoteMapExport = nil
-        return
-    end
+    ForeverDeathNoteMapExport = nil
+    if not root then return end
     local cutoff, rows = GetServerTime() - mapReportAge, {}
-    for _, row in ipairs(root.mapObservations or {}) do
-        if row.at >= cutoff then rows[#rows + 1] = row end
+    if root.mapSyncEnabled then
+        for _, row in ipairs(root.mapObservations or {}) do
+            if row.at >= cutoff then rows[#rows + 1] = row end
+        end
+        root.mapObservations = rows
     end
-    root.mapObservations = rows
-    ForeverDeathNoteMapExport = "FDNPVP1\n" .. encode({ version = 1, reports = rows })
+    local collector = note.MapRelayIsCollector and note.MapRelayIsCollector()
+    if note.MapRelayAppendSaved then
+        local export = {}
+        for _, row in ipairs(rows) do export[#export + 1] = row end
+        note.MapRelayAppendSaved(export, cutoff, collector)
+        rows = export
+    end
+    if collector or (root.mapSyncEnabled and not (note.MapRelayHasTarget and note.MapRelayHasTarget())) then
+        ForeverDeathNoteMapExport = "FDNPVP1\n" .. encode({ version = 1, reports = rows })
+    end
 end
 
 local function rankingFaction(faction)

@@ -193,6 +193,7 @@ function actions.PLAYER_LOGIN()
     note.Refresh()
     if note.StartSharing then note.StartSharing() end
     if note.StartTerritorySync then note.StartTerritorySync() end
+    if note.StartMapRelay then note.StartMapRelay() end
     actions.PLAYER_GUILD_UPDATE("player")
     if note.DemoData then note.DemoData() end
     if note.HuntSync then note.HuntSync() end
